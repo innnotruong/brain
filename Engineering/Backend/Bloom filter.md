@@ -60,6 +60,79 @@ Overall, Bloom Filters are suitable for applications where memory usage needs to
 
 - `Hash Function Dependency`: Bloom Filters rely heavily on hash functions for their operation. The quality of the hash functions used can significantly impact the performance and effectiveness of the Bloom Filter.
 
+## Simple Implementation:
+
+Nowadays, many cache system integrated bloom filter as a feature. Can use it without implementation, but if you want try to hand-on. the simple implementation is a example:
+
+```
+package main
+
+import (
+    "crypto/sha256"
+    "fmt"
+    "hash"
+    "math"
+)
+
+type BloomFilter struct {
+    size       uint
+    numHashes  uint
+    bitArray   []bool
+    hashFunc   hash.Hash
+}
+
+func NewBloomFilter(size, numHashes uint) *BloomFilter {
+    return &BloomFilter{
+        size:       size,
+        numHashes:  numHashes,
+        bitArray:   make([]bool, size),
+        hashFunc:   sha256.New(),
+    }
+}
+
+func (bf *BloomFilter) Add(item string) {
+    for i := uint(0); i < bf.numHashes; i++ {
+        index := bf.hash(item, i) % bf.size
+        bf.bitArray[index] = true
+    }
+}
+
+func (bf *BloomFilter) Contains(item string) bool {
+    for i := uint(0); i < bf.numHashes; i++ {
+        index := bf.hash(item, i) % bf.size
+        if !bf.bitArray[index] {
+            return false
+        }
+    }
+    return true
+}
+
+func (bf *BloomFilter) hash(item string, index uint) uint {
+    bf.hashFunc.Reset()
+    bf.hashFunc.Write([]byte(item))
+    bf.hashFunc.Write([]byte(fmt.Sprintf("%d", index)))
+    hashBytes := bf.hashFunc.Sum(nil)
+    hashInt := uint(hashBytes[0]) | uint(hashBytes[1])<<8 | uint(hashBytes[2])<<16 | uint(hashBytes[3])<<24
+    return hashInt
+}
+
+func main() {
+    bloomFilter := NewBloomFilter(100, 3)
+
+    // Add user identities to the Bloom Filter
+    user_identities := []string{"user123", "user456", "user789"}
+    for _, identity := range user_identities {
+        bloomFilter.Add(identity)
+    }
+
+    // Check for existence of user identities
+    fmt.Println(bloomFilter.Contains("user123")) // true
+    fmt.Println(bloomFilter.Contains("user789")) // true
+    fmt.Println(bloomFilter.Contains("user999")) // false
+}
+
+```
+
 <!-- cta -->
 ---
 ### Contributing
