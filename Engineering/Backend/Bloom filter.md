@@ -64,7 +64,7 @@ Overall, Bloom Filters are suitable for applications where memory usage needs to
 
 Nowadays, many cache system integrated bloom filter as a feature. Can use it without implementation, but if you want try to hand-on. the simple implementation is a example:
 
-```
+```go
 package main
 
 import (
