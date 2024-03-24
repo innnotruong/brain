@@ -19,7 +19,7 @@ A Bloom Filter is a probabilistic data structure used for testing whether an ele
 ``Checking Membership``: To check if an element is in the Bloom Filter, you again run it through each of the `k` hash functions. If all `k` bits are set to `1` in the bit array, the element is probably in the set. If any of the bits are `0`, then the element is definitely not in the set. However, due to potential hash collisions, `false positives are possible`.
 
 ## When to use?
-Imagine that you have a system which millions user, and then you have a user table which had millions of records. So everytime a new user is registered, you have to query millions records table to check username is existed or not which is very bad in performance. Instead of that, you can `Checking membership` in Bloom Filter which just have `Time complexity = O(k)` (k is number of hash function) and then response to user that username is alreay existed. The result has a small probability of false positive(username not existed but response existed) due to potential hash collion but it acceptable by notify user can register with other username.
+Imagine that you have a system which millions user, and then you have a user table which had millions of records. So everytime a new user is registered, you have to query millions records table to check username is existed or not which cost `Time complexity = O(n)` (`n` will be vary upto millions) in case not aggregate further. Instead of that, you can `Checking membership` in Bloom Filter which just have `Time complexity = O(k)` (k is constant number of hash function) and then response to user that username is alreay existed. The result has a small probability of false positive(username not existed but response existed) due to potential hash collion but it acceptable by notify user can register with other username.
 
 Besides above scenario, Bloom Filter can apply in other case like:
 
@@ -68,67 +68,64 @@ Nowadays, many cache system integrated bloom filter as a feature. Can use it wit
 package main
 
 import (
-    "crypto/sha256"
-    "fmt"
-    "hash"
-    "math"
+	"fmt"
+	"hash/crc32"
+	"hash/fnv"
 )
 
 type BloomFilter struct {
-    size       uint
-    numHashes  uint
-    bitArray   []bool
-    hashFunc   hash.Hash
+	bitArray []bool
+	size     uint
+	hashFunc []func(data string) uint
 }
 
-func NewBloomFilter(size, numHashes uint) *BloomFilter {
-    return &BloomFilter{
-        size:       size,
-        numHashes:  numHashes,
-        bitArray:   make([]bool, size),
-        hashFunc:   sha256.New(),
-    }
+func NewBloomFilter(size uint) *BloomFilter {
+	bf := &BloomFilter{
+		bitArray: make([]bool, size),
+		size:     size,
+		hashFunc: []func(data string) uint{
+			func(data string) uint { return uint(fnv.New32().Sum32()) },
+			func(data string) uint { return uint(crc32.ChecksumIEEE([]byte(data))) },
+			// Add more hash functions here if needed
+		},
+	}
+	return bf
 }
 
-func (bf *BloomFilter) Add(item string) {
-    for i := uint(0); i < bf.numHashes; i++ {
-        index := bf.hash(item, i) % bf.size
-        bf.bitArray[index] = true
-    }
+func (bf *BloomFilter) Add(data string, numHash int) error {
+	if numHash > len(bf.hashFunc) {
+		return fmt.Errorf("number of hash functions exceeds the limit")
+	}
+	for i := 0; i < numHash; i++ {
+		index := bf.hashFunc[i](data) % bf.size
+		bf.bitArray[index] = true
+	}
+	return nil
 }
 
-func (bf *BloomFilter) Contains(item string) bool {
-    for i := uint(0); i < bf.numHashes; i++ {
-        index := bf.hash(item, i) % bf.size
-        if !bf.bitArray[index] {
-            return false
-        }
-    }
-    return true
-}
-
-func (bf *BloomFilter) hash(item string, index uint) uint {
-    bf.hashFunc.Reset()
-    bf.hashFunc.Write([]byte(item))
-    bf.hashFunc.Write([]byte(fmt.Sprintf("%d", index)))
-    hashBytes := bf.hashFunc.Sum(nil)
-    hashInt := uint(hashBytes[0]) | uint(hashBytes[1])<<8 | uint(hashBytes[2])<<16 | uint(hashBytes[3])<<24
-    return hashInt
+func (bf *BloomFilter) Contains(data string) bool {
+	for _, hashFunc := range bf.hashFunc {
+		index := hashFunc(data) % bf.size
+		if !bf.bitArray[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func main() {
-    bloomFilter := NewBloomFilter(100, 3)
+	bloomFilter := NewBloomFilter(100)
 
-    // Add user identities to the Bloom Filter
-    user_identities := []string{"user123", "user456", "user789"}
-    for _, identity := range user_identities {
-        bloomFilter.Add(identity)
-    }
+	// Add user identities to the Bloom Filter
+	userIdentities := []string{"user123", "user456", "user789"}
+	for _, identity := range userIdentities {
+		bloomFilter.Add(identity, 2)
+	}
 
-    // Check for existence of user identities
-    fmt.Println(bloomFilter.Contains("user123")) // true
-    fmt.Println(bloomFilter.Contains("user789")) // true
-    fmt.Println(bloomFilter.Contains("user999")) // false
+	// Check for existence of user identities
+	fmt.Println(bloomFilter.Contains("user123")) // true
+	fmt.Println(bloomFilter.Contains("user789")) // true
+	fmt.Println(bloomFilter.Contains("user999")) // false
 }
 
 ```
